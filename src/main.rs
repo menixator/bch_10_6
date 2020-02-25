@@ -37,21 +37,13 @@ pub enum BCHError {
 
 pub struct SQRTError;
 fn sqrt(input: i64) -> Result<i64, SQRTError> {
-    let input = euc_mod(input, MOD_N);
+    let input = input.rem_euclid(MOD_N);
     for i in 1..=MOD_N {
-        if euc_mod(i.pow(2), MOD_N) == input {
+        if (i.pow(2)).rem_euclid(MOD_N) == input {
             return Ok(i);
         }
     }
     Err(SQRTError)
-}
-
-pub fn euc_mod(a: i64, b: i64) -> i64 {
-    let mut ret = a % b;
-    if ret < 0 {
-        ret += b;
-    }
-    return ret;
 }
 
 pub fn inverse(a: i64, n: i64) -> i64 {
@@ -89,6 +81,7 @@ pub fn calculate_syn(input: &[u8; 10], pass: u8) -> i64 {
 }
 
 pub struct FixFail;
+
 pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, FixFail> {
     let mut fixbuffer: [u8; 10] = [0; 10];
     fixbuffer.copy_from_slice(&input[0..10]);
@@ -100,7 +93,7 @@ pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, F
 
         let current_value: i8 = fixbuffer[correction.position - 1] as i8;
         let corrected: i8 = current_value - (correction.magnitude as i8);
-        let new_value: u8 = euc_mod(corrected as i64, MOD_N) as u8;
+        let new_value: u8 = (corrected as i64).rem_euclid(MOD_N) as u8;
         fixbuffer[correction.position - 1] = new_value;
     }
     let corrected: String = fixbuffer
@@ -130,24 +123,24 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
         input_slice.copy_from_slice(&input[0..10]);
         input_slice
     };
-    let s1: i64 = euc_mod(calculate_syn(&input, 0), MOD_N);
-    let s2: i64 = euc_mod(calculate_syn(&input, 1), MOD_N);
-    let s3: i64 = euc_mod(calculate_syn(&input, 2), MOD_N);
-    let s4: i64 = euc_mod(calculate_syn(&input, 3), MOD_N);
+    let s1: i64 = calculate_syn(&input, 0).rem_euclid(MOD_N);
+    let s2: i64 = calculate_syn(&input, 1).rem_euclid(MOD_N);
+    let s3: i64 = calculate_syn(&input, 2).rem_euclid(MOD_N);
+    let s4: i64 = calculate_syn(&input, 3).rem_euclid(MOD_N);
 
     if s1 == 0 && s2 == 0 && s3 == 0 && s4 == 0 {
         return Ok(Syndromes(s1, s2, s3, s4));
     }
-    let p: i64 = euc_mod(s2.pow(2) - (s1 * s3), MOD_N);
-    let q: i64 = euc_mod((s1 * s4) - (s2 * s3), MOD_N);
-    let r: i64 = euc_mod(s3.pow(2) - (s2 * s4), MOD_N);
+    let p: i64 = (s2.pow(2) - (s1 * s3)).rem_euclid(MOD_N);
+    let q: i64 = ((s1 * s4) - (s2 * s3)).rem_euclid(MOD_N);
+    let r: i64 = (s3.pow(2) - (s2 * s4)).rem_euclid(MOD_N);
     let syn = Syndromes(s1, s2, s3, s4);
     let pqr = PQR(p, q, r);
 
     if p == 0 && q == 0 && r == 0 {
         let magnitude = s1;
 
-        let pos = euc_mod(s2 * inverse(euc_mod(s1, MOD_N), MOD_N), MOD_N);
+        let pos = (s2 * inverse(s1.rem_euclid(MOD_N), MOD_N)).rem_euclid(MOD_N);
         let error = Correction {
             position: pos as usize,
             magnitude: magnitude as usize,
@@ -163,18 +156,16 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
             error,
         });
     } else {
-        let pol: i64 = sqrt(euc_mod(q.pow(2) - (4 * p * r), MOD_N))
+        let pol: i64 = sqrt((q.pow(2) - (4 * p * r)).rem_euclid(MOD_N))
             .map_err(|_| BCHError::TripleError { syn, pqr })?;
         // position
-        let i = euc_mod((-q + pol) * (inverse(2 * p, MOD_N)), MOD_N);
-        let j = euc_mod((-q - pol) * (inverse(2 * p, MOD_N)), MOD_N);
+        let i = ((-q + pol) * (inverse(2 * p, MOD_N))).rem_euclid(MOD_N);
+        let j = ((-q - pol) * (inverse(2 * p, MOD_N))).rem_euclid(MOD_N);
 
         // magnitudes
-        let b = euc_mod(
-            (i * s1 - s2) * euc_mod(inverse(euc_mod(i - j, MOD_N), MOD_N), MOD_N),
-            MOD_N,
-        );
-        let a = euc_mod(s1 - b, MOD_N);
+        let b = ((i * s1 - s2) * inverse((i - j).rem_euclid(MOD_N), MOD_N).rem_euclid(MOD_N))
+            .rem_euclid(MOD_N);
+        let a = (s1 - b).rem_euclid(MOD_N);
 
         let error1 = Correction {
             position: i as usize,
