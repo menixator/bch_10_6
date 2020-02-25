@@ -80,27 +80,38 @@ pub fn inverse(a: i64, n: i64) -> i64 {
     return t;
 }
 
-pub fn calculate_syn(input: &[i64; 10], pass: u8) -> i64 {
+pub fn calculate_syn(input: &[u8; 10], pass: u8) -> i64 {
     let mut sum = 0;
     for (index, num) in input.iter().enumerate() {
-        sum += num * ((index + 1) as i64).pow(pass as u32)
+        sum += (*num as i64) * ((index + 1) as i64).pow(pass as u32)
     }
     sum
 }
 
 pub struct FixFail;
-pub fn bch_fix(input: &mut [i64; 10], correction: &Correction) -> Result<(), FixFail> {
-    if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
-        return Err(FixFail);
+pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, FixFail> {
+    let mut fixbuffer: [u8; 10] = [0; 10];
+    fixbuffer.copy_from_slice(&input[0..10]);
+
+    for correction in corrections.iter() {
+        if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
+            return Err(FixFail);
+        }
+
+        let current_value: i8 = fixbuffer[correction.position - 1] as i8;
+        let corrected: i8 = current_value - (correction.magnitude as i8);
+        let new_value: u8 = euc_mod(corrected as i64, MOD_N) as u8;
+        fixbuffer[correction.position - 1] = new_value;
     }
-    input[correction.position - 1] = euc_mod(
-        input[correction.position - 1] - correction.magnitude as i64,
-        MOD_N,
-    );
-    Ok(())
+    let corrected: String = fixbuffer
+        .iter()
+        .map(|digit| std::char::from_digit(*digit as u32, 10).unwrap())
+        .collect();
+
+    Ok(corrected)
 }
 pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
-    let mut input = {
+    let input = {
         let input = format!("{:010}", input);
         if input.len() != 10 {
             return Err(BCHError::InvalidFormat);
@@ -112,10 +123,10 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
                 digit
                     .to_digit(10)
                     .ok_or(BCHError::InvalidFormat)
-                    .map(|val| val as i64)
+                    .map(|val| val as u8)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let mut input_slice: [i64; 10] = [0; 10];
+        let mut input_slice: [u8; 10] = [0; 10];
         input_slice.copy_from_slice(&input[0..10]);
         input_slice
     };
@@ -141,11 +152,9 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
             position: pos as usize,
             magnitude: magnitude as usize,
         };
-        bch_fix(&mut input, &error).map_err(|_| BCHError::TripleError { syn, pqr })?;
-        let mut corrected = String::new();
-        for num in input.iter() {
-            corrected.push(std::char::from_digit(*num as u32, 10).unwrap());
-        }
+
+        let corrected =
+            bch_fix(input, &[&error]).map_err(|_| BCHError::TripleError { syn, pqr })?;
         // Check if correction will make the number greater than 10
         return Err(BCHError::SingleError {
             corrected,
@@ -176,13 +185,9 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
             magnitude: b as usize,
         };
 
-        bch_fix(&mut input, &error1).map_err(|_| BCHError::TripleError { syn, pqr })?;
-        bch_fix(&mut input, &error2).map_err(|_| BCHError::TripleError { syn, pqr })?;
+        let corrected =
+            bch_fix(input, &[&error1, &error2]).map_err(|_| BCHError::TripleError { syn, pqr })?;
 
-        let mut corrected = String::new();
-        for num in input.iter() {
-            corrected.push(std::char::from_digit(*num as u32, 10).unwrap());
-        }
         return Err(BCHError::DoubleError {
             corrected,
             syn,
