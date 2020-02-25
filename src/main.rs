@@ -1,6 +1,8 @@
 const MOD_N: i64 = 11;
 const CORRECTION_MIN: usize = 1;
 const CORRECTION_MAX: usize = 10;
+const NUM_DIGITS: usize = 10;
+const RADIX: u32 = 10;
 
 #[derive(PartialEq, Debug)]
 pub struct Correction {
@@ -34,6 +36,8 @@ pub enum BCHError {
         pqr: PQR,
     },
 }
+
+type Input = [u8; NUM_DIGITS];
 
 pub struct SQRTError;
 fn sqrt(input: i64) -> Result<i64, SQRTError> {
@@ -72,7 +76,7 @@ pub fn inverse(a: i64, n: i64) -> i64 {
     return t;
 }
 
-pub fn calculate_syn(input: &[u8; 10], pass: u8) -> i64 {
+pub fn calculate_syn(input: &Input, pass: u8) -> i64 {
     let mut sum = 0;
     for (index, num) in input.iter().enumerate() {
         sum += (*num as i64) * ((index + 1) as i64).pow(pass as u32)
@@ -82,12 +86,12 @@ pub fn calculate_syn(input: &[u8; 10], pass: u8) -> i64 {
 
 pub enum FixError {
     OutOfBounds,
-    CorrectedValueTooBig
+    CorrectedValueTooBig,
 }
 
-pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, FixError> {
-    let mut fixbuffer: [u8; 10] = [0; 10];
-    fixbuffer.copy_from_slice(&input[0..10]);
+pub fn bch_fix(input: Input, corrections: &[&Correction]) -> Result<String, FixError> {
+    let mut fixbuffer: Input = [0; NUM_DIGITS];
+    fixbuffer.copy_from_slice(&input[0..NUM_DIGITS]);
 
     for correction in corrections.iter() {
         if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
@@ -99,7 +103,7 @@ pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, F
         let new_value: u8 = (corrected as i64).rem_euclid(MOD_N) as u8;
 
         if (new_value as usize) >= CORRECTION_MAX {
-            return Err(FixError::CorrectedValueTooBig)
+            return Err(FixError::CorrectedValueTooBig);
         }
 
         fixbuffer[correction.position - 1] = new_value;
@@ -107,7 +111,7 @@ pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, F
     let corrected: String = fixbuffer
         .iter()
         .map(|digit| {
-            let digit_as_char = std::char::from_digit(*digit as u32, 10);
+            let digit_as_char = std::char::from_digit(*digit as u32, RADIX);
             digit_as_char.unwrap()
         })
         .collect();
@@ -117,7 +121,7 @@ pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, F
 pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
     let input = {
         let input = format!("{:010}", input);
-        if input.len() != 10 {
+        if input.len() != NUM_DIGITS {
             return Err(BCHError::InvalidFormat);
         }
 
@@ -125,13 +129,13 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
             .chars()
             .map(|digit| {
                 digit
-                    .to_digit(10)
+                    .to_digit(RADIX)
                     .ok_or(BCHError::InvalidFormat)
                     .map(|val| val as u8)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let mut input_slice: [u8; 10] = [0; 10];
-        input_slice.copy_from_slice(&input[0..10]);
+        let mut input_slice: Input = [0; NUM_DIGITS];
+        input_slice.copy_from_slice(&input[0..NUM_DIGITS]);
         input_slice
     };
     let s1: i64 = calculate_syn(&input, 0).rem_euclid(MOD_N);
