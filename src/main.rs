@@ -3,7 +3,7 @@ const CORRECTION_MIN: usize = 1;
 const CORRECTION_MAX: usize = 10;
 
 #[derive(PartialEq, Debug)]
-pub struct BCHCorrection {
+pub struct Correction {
     position: usize,
     magnitude: usize,
 }
@@ -21,13 +21,13 @@ pub enum BCHError {
         corrected: String,
         syn: Syndromes,
         pqr: PQR,
-        error: BCHCorrection,
+        error: Correction,
     },
     DoubleError {
         corrected: String,
         syn: Syndromes,
         pqr: PQR,
-        errors: [BCHCorrection; 2],
+        errors: [Correction; 2],
     },
     TripleError {
         syn: Syndromes,
@@ -89,7 +89,7 @@ pub fn calculate_syn(input: &[i64; 10], pass: u8) -> i64 {
 }
 
 pub struct FixFail;
-pub fn bch_fix(input: &mut [i64; 10], correction: &BCHCorrection) -> Result<(), FixFail> {
+pub fn bch_fix(input: &mut [i64; 10], correction: &Correction) -> Result<(), FixFail> {
     if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
         return Err(FixFail);
     }
@@ -137,7 +137,7 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
         let magnitude = s1;
 
         let pos = euc_mod(s2 * inverse(euc_mod(s1, MOD_N), MOD_N), MOD_N);
-        let error = BCHCorrection {
+        let error = Correction {
             position: pos as usize,
             magnitude: magnitude as usize,
         };
@@ -167,11 +167,11 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
         );
         let a = euc_mod(s1 - b, MOD_N);
 
-        let error1 = BCHCorrection {
+        let error1 = Correction {
             position: i as usize,
             magnitude: a as usize,
         };
-        let error2 = BCHCorrection {
+        let error2 = Correction {
             position: j as usize,
             magnitude: b as usize,
         };
@@ -204,7 +204,7 @@ fn test_single_error() {
             corrected: String::from("3745195876"),
             syn: Syndromes(2, 4, 8, 5),
             pqr: PQR(0, 0, 0),
-            error: BCHCorrection {
+            error: Correction {
                 position: 2,
                 magnitude: 2
             }
@@ -226,12 +226,12 @@ fn test_double_err_1() {
                 pqr: PQR(5, 0, 10),
                 errors: [
                     //i,a
-                    BCHCorrection {
+                    Correction {
                         position: 8,
                         magnitude: 3
                     },
                     //j,b
-                    BCHCorrection {
+                    Correction {
                         position: 3,
                         magnitude: 8
                     }
@@ -254,12 +254,12 @@ fn test_double_err_2() {
             pqr: PQR(1, 6, 4),
             errors: [
                 //i,a
-                BCHCorrection {
+                Correction {
                     position: 4,
                     magnitude: 9
                 },
                 //j,b
-                BCHCorrection {
+                Correction {
                     position: 1,
                     magnitude: 8
                 }
@@ -281,12 +281,12 @@ fn test_double_err_3() {
             pqr: PQR(4, 1, 8),
             errors: [
                 //i,a
-                BCHCorrection {
+                Correction {
                     position: 10,
                     magnitude: 5
                 },
                 //j,b
-                BCHCorrection {
+                Correction {
                     position: 9,
                     magnitude: 8
                 }
@@ -308,12 +308,12 @@ fn test_double_err_4() {
             pqr: PQR(3, 1, 7),
             errors: [
                 //i,a
-                BCHCorrection {
+                Correction {
                     position: 6,
                     magnitude: 2
                 },
                 //j,b
-                BCHCorrection {
+                Correction {
                     position: 1,
                     magnitude: 5
                 }
@@ -335,12 +335,12 @@ fn test_double_err_5() {
             pqr: PQR(6, 10, 10),
             errors: [
                 //i,a
-                BCHCorrection {
+                Correction {
                     position: 6,
                     magnitude: 2
                 },
                 //j,b
-                BCHCorrection {
+                Correction {
                     position: 7,
                     magnitude: 8
                 }
@@ -362,12 +362,12 @@ fn test_double_err_6() {
             pqr: PQR(10, 3, 9),
             errors: [
                 //i,a
-                BCHCorrection {
+                Correction {
                     position: 1,
                     magnitude: 9
                 },
                 //j,b
-                BCHCorrection {
+                Correction {
                     position: 2,
                     magnitude: 5
                 }
@@ -389,12 +389,12 @@ fn test_double_err_7() {
             pqr: PQR(4, 6, 4),
             errors: [
                 //i,a
-                BCHCorrection {
+                Correction {
                     position: 8,
                     magnitude: 1
                 },
                 //j,b
-                BCHCorrection {
+                Correction {
                     position: 7,
                     magnitude: 7
                 }
@@ -416,12 +416,12 @@ fn test_double_err_8() {
             pqr: PQR(7, 2, 6),
             errors: [
                 // i,a
-                BCHCorrection {
+                Correction {
                     position: 7,
                     magnitude: 6
                 },
                 // j,b
-                BCHCorrection {
+                Correction {
                     position: 10,
                     magnitude: 7
                 },
