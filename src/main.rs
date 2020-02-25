@@ -80,15 +80,15 @@ pub fn calculate_syn(input: &[u8; 10], pass: u8) -> i64 {
     sum
 }
 
-pub struct FixFail;
+pub struct OutOfBounds;
 
-pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, FixFail> {
+pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, OutOfBounds> {
     let mut fixbuffer: [u8; 10] = [0; 10];
     fixbuffer.copy_from_slice(&input[0..10]);
 
     for correction in corrections.iter() {
         if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
-            return Err(FixFail);
+            return Err(OutOfBounds);
         }
 
         let current_value: i8 = fixbuffer[correction.position - 1] as i8;
