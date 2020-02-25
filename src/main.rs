@@ -80,25 +80,36 @@ pub fn calculate_syn(input: &[u8; 10], pass: u8) -> i64 {
     sum
 }
 
-pub struct OutOfBounds;
+pub enum FixError {
+    OutOfBounds,
+    CorrectedValueTooBig
+}
 
-pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, OutOfBounds> {
+pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, FixError> {
     let mut fixbuffer: [u8; 10] = [0; 10];
     fixbuffer.copy_from_slice(&input[0..10]);
 
     for correction in corrections.iter() {
         if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
-            return Err(OutOfBounds);
+            return Err(FixError::OutOfBounds);
         }
 
         let current_value: i8 = fixbuffer[correction.position - 1] as i8;
         let corrected: i8 = current_value - (correction.magnitude as i8);
         let new_value: u8 = (corrected as i64).rem_euclid(MOD_N) as u8;
+
+        if new_value >= 10 {
+            return Err(FixError::CorrectedValueTooBig)
+        }
+
         fixbuffer[correction.position - 1] = new_value;
     }
     let corrected: String = fixbuffer
         .iter()
-        .map(|digit| std::char::from_digit(*digit as u32, 10).unwrap())
+        .map(|digit| {
+            let digit_as_char = std::char::from_digit(*digit as u32, 10);
+            digit_as_char.unwrap()
+        })
         .collect();
 
     Ok(corrected)
