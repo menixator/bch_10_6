@@ -50,6 +50,7 @@ fn sqrt(input: i64) -> Result<i64, SQRTError> {
     Err(SQRTError)
 }
 
+// find the inverse of a mod n
 pub fn inverse(a: i64, n: i64) -> i64 {
     let mut t: i64 = 0;
     let mut newt: i64 = 1;
@@ -76,6 +77,7 @@ pub fn inverse(a: i64, n: i64) -> i64 {
     return t;
 }
 
+// Calculates the syndromes from a [u8; 10]
 pub fn calculate_syn(input: &Input, pass: u8) -> i64 {
     let mut sum = 0;
     for (index, num) in input.iter().enumerate() {
@@ -89,42 +91,65 @@ pub enum FixError {
     CorrectedValueTooBig,
 }
 
+/// A handy function to fix double or single errors
 pub fn bch_fix(input: Input, corrections: &[&Correction]) -> Result<String, FixError> {
+    // Initialize a buffer that we can mutate
     let mut fixbuffer: Input = [0; NUM_DIGITS];
+    // Copy from the immutable input slice
     fixbuffer.copy_from_slice(&input[0..NUM_DIGITS]);
 
+    // Loop over any corrections
     for correction in corrections.iter() {
+        // Check if the correction is in bounds
         if correction.position < CORRECTION_MIN || correction.position > CORRECTION_MAX {
             return Err(FixError::OutOfBounds);
         }
 
+        // Get the current value as an i8(fixing the value might make it negative, but it cannot
+        // overflow an i8)
         let current_value: i8 = fixbuffer[correction.position - 1] as i8;
+
+        // Correct the value by subtracting the magnitude
         let corrected: i8 = current_value - (correction.magnitude as i8);
+
+        // mod 11 the result
         let new_value: u8 = (corrected as i64).rem_euclid(MOD_N) as u8;
 
+        // Check if the result is >= 10 and prepare for a triple error
         if (new_value as usize) >= CORRECTION_MAX {
             return Err(FixError::CorrectedValueTooBig);
         }
 
+        // modify the buffer
         fixbuffer[correction.position - 1] = new_value;
     }
+    // Construct a string from the slice.
     let corrected: String = fixbuffer
         .iter()
         .map(|digit| {
             let digit_as_char = std::char::from_digit(*digit as u32, RADIX);
+            // Unwrap is safe as all the characters are digits and < 10
             digit_as_char.unwrap()
         })
         .collect();
 
     Ok(corrected)
 }
+
+/// Takes a usize and checks(and fixes if possible) any errors in a BCH encoded value
 pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
+    // Converts an unsigned integer to a string, splits it and converts each digit into a u8
     let input = {
+        // Padding is required for numbers between 0-10^9
+        // Padding is not required for numbers between 10^9-(10^9)-1
         let input = format!("{:010}", input);
+
+        // Complain if the length is not exactly 10 digits(eg: if the number is bigger than 10^10)
         if input.len() != NUM_DIGITS {
             return Err(BCHError::InvalidFormat);
         }
 
+        // Convert the number into a Vec<u8>
         let input: Vec<_> = input
             .chars()
             .map(|digit| {
@@ -134,36 +159,61 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
                     .map(|val| val as u8)
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        // Prefer slices over vectors
         let mut input_slice: Input = [0; NUM_DIGITS];
         input_slice.copy_from_slice(&input[0..NUM_DIGITS]);
         input_slice
     };
+
+    // Calculating the syndromes for 4 passes.
+    // For BCH(10, 6)
+    // s{n} where n={1,2,3,4} = sum(input[index] * ((index+1)^(n-1)))%11
     let s1: i64 = calculate_syn(&input, 0).rem_euclid(MOD_N);
     let s2: i64 = calculate_syn(&input, 1).rem_euclid(MOD_N);
     let s3: i64 = calculate_syn(&input, 2).rem_euclid(MOD_N);
     let s4: i64 = calculate_syn(&input, 3).rem_euclid(MOD_N);
 
+    // If all syndromes are 0, then there are no errors
     if s1 == 0 && s2 == 0 && s3 == 0 && s4 == 0 {
         return Ok(Syndromes(s1, s2, s3, s4));
     }
-    let p: i64 = (s2.pow(2) - (s1 * s3)).rem_euclid(MOD_N);
-    let q: i64 = ((s1 * s4) - (s2 * s3)).rem_euclid(MOD_N);
-    let r: i64 = (s3.pow(2) - (s2 * s4)).rem_euclid(MOD_N);
+    // We will be returning this for any single, double, or triple errors
     let syn = Syndromes(s1, s2, s3, s4);
+
+    // Calculating pqr.
+
+    // p = ( ( s2^2 ) - (s1 * s3) ) % 11
+    let p: i64 = (s2.pow(2) - (s1 * s3)).rem_euclid(MOD_N);
+
+    // q = ( ( s1* s4 ) - (s2 * s3) )  % 11
+    let q: i64 = ((s1 * s4) - (s2 * s3)).rem_euclid(MOD_N);
+
+    // r = ( ( s3^2 ) - ( s2*s3 ) ) % 11
+    let r: i64 = (s3.pow(2) - (s2 * s4)).rem_euclid(MOD_N);
     let pqr = PQR(p, q, r);
 
+    // if p, q, r = 0 then it indicates a single error
     if p == 0 && q == 0 && r == 0 {
+        // The magnitude(i) is s1
         let magnitude = s1;
 
+        // The position j = (s2/s1) % 11
         let pos = (s2 * inverse(s1.rem_euclid(MOD_N), MOD_N)).rem_euclid(MOD_N);
+
         let error = Correction {
             position: pos as usize,
             magnitude: magnitude as usize,
         };
 
+        // Attempt a correction, if either the position is less than 1 or greater than 1, it is
+        // considered to be a triple error as those would go out of bounds If the corrected value
+        // is 10 or greater(but that won't happen since %11), then it is also considered a triple
+        // error.
         let corrected =
             bch_fix(input, &[&error]).map_err(|_| BCHError::TripleError { syn, pqr })?;
-        // Check if correction will make the number greater than 10
+
+        // Single bch_fix returned without any errors, this is definitely a single error
         return Err(BCHError::SingleError {
             corrected,
             syn,
@@ -171,15 +221,23 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
             error,
         });
     } else {
+        // Otherwise, we try to see if it's a double error
+
+        // finding sqrt(q^2-(4*p*r))%11
         let pol: i64 = sqrt((q.pow(2) - (4 * p * r)).rem_euclid(MOD_N))
             .map_err(|_| BCHError::TripleError { syn, pqr })?;
+
         // position
+        // to find the positions we use i,j=( (-q (+-) ( sqrt( q^2 - ( 4 * p * r ) )%11 ) ) / 2 * p ) % 11
         let i = ((-q + pol) * (inverse(2 * p, MOD_N))).rem_euclid(MOD_N);
         let j = ((-q - pol) * (inverse(2 * p, MOD_N))).rem_euclid(MOD_N);
 
         // magnitudes
+        // to find the magnitudes we use:
+        // b = ( ( i * s1 - s2 ) / ( i - j ) ) % 11
         let b = ((i * s1 - s2) * inverse((i - j).rem_euclid(MOD_N), MOD_N).rem_euclid(MOD_N))
             .rem_euclid(MOD_N);
+        // a = ( s1 - b ) % 11
         let a = (s1 - b).rem_euclid(MOD_N);
 
         let error1 = Correction {
@@ -191,6 +249,8 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
             magnitude: b as usize,
         };
 
+        // Attempt to fix the error, if the position is out of bounds or the corrected value is >=
+        // 10, then claim a triple error.
         let corrected =
             bch_fix(input, &[&error1, &error2]).map_err(|_| BCHError::TripleError { syn, pqr })?;
 
@@ -202,6 +262,7 @@ pub fn bch_decode(input: usize) -> Result<Syndromes, BCHError> {
         });
     }
 }
+
 #[test]
 fn test_no_error() {
     assert_eq!(bch_decode(3745195876), Ok(Syndromes(0, 0, 0, 0)));
@@ -486,7 +547,7 @@ fn test_triple_err_4() {
 }
 
 fn main() {
-    for i in 0..(10_usize.pow(10)) {
+    for i in 0..(10_usize.pow(11) - 1) {
         println!("{} -> {:?}", i, bch_decode(i));
     }
 }
