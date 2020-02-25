@@ -98,7 +98,7 @@ pub fn bch_fix(input: [u8; 10], corrections: &[&Correction]) -> Result<String, F
         let corrected: i8 = current_value - (correction.magnitude as i8);
         let new_value: u8 = (corrected as i64).rem_euclid(MOD_N) as u8;
 
-        if new_value >= 10 {
+        if (new_value as usize) >= CORRECTION_MAX {
             return Err(FixError::CorrectedValueTooBig)
         }
 
@@ -482,5 +482,7 @@ fn test_triple_err_4() {
 }
 
 fn main() {
-    println!("{:#?}", bch_decode(3745195876));
+    for i in 0..(10_usize.pow(10)) {
+        println!("{} -> {:?}", i, bch_decode(i));
+    }
 }
